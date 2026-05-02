@@ -19,3 +19,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     created_at: datetime
+
+
+class UserRoleUpdate(BaseModel):
+    role: str = Field(pattern="^(admin|user)$")

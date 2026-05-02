@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, keys
+from app.api.v1 import admin, auth, keys
+from app.middleware.api_key import APIKeyVerificationMiddleware
 
 app = FastAPI(
     title="API Key Manager",
@@ -15,7 +16,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(APIKeyVerificationMiddleware)
 
+app.include_router(admin.router, prefix="/api/v1/admin")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(keys.router, prefix="/api/v1/keys")
 

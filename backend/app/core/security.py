@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from types import SimpleNamespace
@@ -52,6 +54,11 @@ class SecuritySettings(BaseSettings):
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
         gt=0,
     )
+    refresh_token_expire_days: int = Field(
+        default=30,
+        validation_alias="REFRESH_TOKEN_EXPIRE_DAYS",
+        gt=0,
+    )
     jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
 
 
@@ -66,6 +73,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+
+def create_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def refresh_token_expires_at() -> datetime:
+    settings = get_security_settings()
+    return datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
 
 
 def create_access_token(

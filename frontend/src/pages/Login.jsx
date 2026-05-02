@@ -35,7 +35,7 @@ function Login() {
         },
       })
 
-      login(response.data.access_token)
+      login(response.data.access_token, response.data.refresh_token)
       navigate(destination, { replace: true })
     } catch (err) {
       setError(err.response?.data?.detail || 'Unable to sign in')

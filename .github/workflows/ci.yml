@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: sqlite+pysqlite:///:memory:
+      SECRET_KEY: ci-secret-key-0123456789abcdef012345
+      API_KEY_PROTECTED_PATH_PREFIXES: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: uv sync --frozen
+      - name: Run backend tests
+        run: uv run pytest
+      - name: Compile backend
+        run: uv run python -m compileall -q main.py app
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build frontend
+        run: npm run build
+
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: api_key_user
+      POSTGRES_PASSWORD: api_key_password
+      POSTGRES_DB: api_key_manager
+      SECRET_KEY: ci-secret-key-0123456789abcdef012345
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "30"
+      JWT_ALGORITHM: HS256
+      API_KEY_HEADER_NAME: X-API-Key
+      API_KEY_PROTECTED_PATH_PREFIXES: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Compose env file
+        run: cp .env.example .env
+      - name: Validate Docker Compose config
+        run: docker compose config
