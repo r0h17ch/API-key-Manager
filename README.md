@@ -68,6 +68,9 @@ REFRESH_TOKEN_EXPIRE_DAYS=30
 JWT_ALGORITHM=HS256
 API_KEY_HEADER_NAME=X-API-Key
 API_KEY_PROTECTED_PATH_PREFIXES=
+
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=Admin@12345
 ```
 
 For Docker, `docker-compose.yml` overrides the backend database and Redis hostnames to use internal service names:
@@ -76,6 +79,19 @@ For Docker, `docker-compose.yml` overrides the backend database and Redis hostna
 - Redis: `cache:6379`
 
 Use a strong, randomly generated `SECRET_KEY` before deploying outside local development.
+
+## Default Admin Login
+
+On first setup, the backend automatically creates an admin user after database migrations run.
+
+Default local test credentials:
+
+```text
+Email: admin@example.com
+Password: Admin@12345
+```
+
+You can change these before startup by setting `ADMIN_EMAIL` and `ADMIN_PASSWORD` in the root `.env` file. If the configured admin email already exists, the startup script keeps the existing password and makes sure that account has the `admin` role.
 
 ## Running with Docker
 
@@ -118,6 +134,7 @@ Run the backend:
 ```bash
 cd backend
 uv run alembic upgrade head
+uv run python -m app.initial_data
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
