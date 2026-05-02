@@ -20,7 +20,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   letter-spacing: 0;
 }
 

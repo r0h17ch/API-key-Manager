@@ -8,6 +8,10 @@ class APIKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
 
+class APIKeyUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
 class APIKeyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

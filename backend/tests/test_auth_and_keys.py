@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash
+from app.models.api_key import APIKey
 from app.models.refresh_token_session import RefreshTokenSession
 from app.models.user import User
 
@@ -52,6 +53,24 @@ def test_register_login_refresh_logout_flow(client):
     assert logout_response.status_code == 204
 
 
+def test_authenticated_user_can_fetch_profile(client):
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "profile@example.com", "password": "strongpassword"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "profile@example.com", "password": "strongpassword"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+
+    profile_response = client.get("/api/v1/auth/me", headers=headers)
+
+    assert profile_response.status_code == 200
+    assert profile_response.json()["email"] == "profile@example.com"
+    assert profile_response.json()["role"] == "user"
+
+
 def test_api_key_lifecycle(client):
     client.post(
         "/api/v1/auth/register",
@@ -88,6 +107,32 @@ def test_api_key_lifecycle(client):
     assert client.get("/api/v1/keys/", headers=headers).json() == []
 
 
+def test_user_can_rename_own_api_key(client):
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "rename@example.com", "password": "strongpassword"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "rename@example.com", "password": "strongpassword"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    create_response = client.post(
+        "/api/v1/keys/",
+        json={"name": "Old name"},
+        headers=headers,
+    )
+
+    update_response = client.patch(
+        f"/api/v1/keys/{create_response.json()['id']}",
+        json={"name": "New name"},
+        headers=headers,
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "New name"
+
+
 def test_admin_can_manage_user_roles(client, db_session: Session):
     admin = User(
         email="admin@example.com",
@@ -121,6 +166,48 @@ def test_admin_can_manage_user_roles(client, db_session: Session):
 
     assert promote_response.status_code == 200
     assert promote_response.json()["role"] == "admin"
+
+
+def test_admin_can_rename_and_revoke_any_api_key(client, db_session: Session):
+    admin = User(
+        email="admin@example.com",
+        hashed_password=get_password_hash("strongpassword"),
+        role="admin",
+    )
+    user = User(
+        email="owner@example.com",
+        hashed_password=get_password_hash("strongpassword"),
+        role="user",
+    )
+    db_session.add_all([admin, user])
+    db_session.commit()
+    db_session.refresh(user)
+    api_key = APIKey(
+        user_id=user.id,
+        name="Owner key",
+        key_prefix="12345678",
+        hashed_key=get_password_hash("1234567890abcdef1234567890abcdef"),
+    )
+    db_session.add(api_key)
+    db_session.commit()
+    db_session.refresh(api_key)
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin@example.com", "password": "strongpassword"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+
+    update_response = client.patch(
+        f"/api/v1/keys/{api_key.id}",
+        json={"name": "Renamed by admin"},
+        headers=headers,
+    )
+    revoke_response = client.delete(f"/api/v1/keys/{api_key.id}", headers=headers)
+
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "Renamed by admin"
+    assert revoke_response.status_code == 204
 
 
 def test_expired_refresh_token_is_rejected(client, db_session: Session):

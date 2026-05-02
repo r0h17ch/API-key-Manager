@@ -11,7 +11,7 @@ from app.api.deps import get_current_admin_user, get_current_user, get_db
 from app.core.security import get_password_hash
 from app.models.api_key import APIKey
 from app.models.user import User
-from app.schemas.api_key import APIKeyCreate, APIKeyResponse
+from app.schemas.api_key import APIKeyCreate, APIKeyResponse, APIKeyUpdate
 
 router = APIRouter(tags=["api-keys"])
 
@@ -86,19 +86,41 @@ def list_all_api_keys(
     return list(db.scalars(select(APIKey).order_by(APIKey.created_at.desc())))
 
 
+@router.patch("/{key_id}", response_model=APIKeyResponse)
+def update_api_key(
+    key_id: uuid.UUID,
+    key_in: APIKeyUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> APIKey:
+    query = select(APIKey).where(APIKey.id == key_id, APIKey.is_revoked.is_(False))
+    if current_user.role != "admin":
+        query = query.where(APIKey.user_id == current_user.id)
+
+    key = db.scalar(query)
+    if key is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found",
+        )
+
+    key.name = key_in.name
+    db.commit()
+    db.refresh(key)
+    return key
+
+
 @router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 def revoke_api_key(
     key_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    key = db.scalar(
-        select(APIKey).where(
-            APIKey.id == key_id,
-            APIKey.user_id == current_user.id,
-            APIKey.is_revoked.is_(False),
-        )
-    )
+    query = select(APIKey).where(APIKey.id == key_id, APIKey.is_revoked.is_(False))
+    if current_user.role != "admin":
+        query = query.where(APIKey.user_id == current_user.id)
+
+    key = db.scalar(query)
     if key is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
